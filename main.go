@@ -167,7 +167,7 @@ func main() {
 	ctx, cancel := s.NewWindow()
 	defer cancel()
 
-	startupCtx, startupCancel := context.WithTimeout(ctx, 10*time.Minute)
+	startupCtx, startupCancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer startupCancel()
 
 	if err := s.login(startupCtx); err != nil {
@@ -432,7 +432,7 @@ func (s *Session) login(ctx context.Context) error {
 		// authenticated.
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			tick := 2 * time.Second
-			timeout := time.Now().Add(2 * time.Minute)
+			timeout := time.Now().Add(5 * time.Minute)
 			var location string
 			for {
 				if err := chromedp.Location(&location).Do(ctx); err != nil {
@@ -577,7 +577,7 @@ func (s *Session) getLocale(ctx context.Context) (string, error) {
 }
 
 func captureScreenshot(ctx context.Context, filePath string) {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	var buf []byte
@@ -604,7 +604,7 @@ func captureScreenshot(ctx context.Context, filePath string) {
 // 3) otherwise it jumps to the end of the timeline (i.e. the oldest photo)
 func (s *Session) firstNav(ctx context.Context) (err error) {
 	if s.userPath+s.albumPath != "" {
-		if err := s.navigateWithAction(ctx, log.Logger, chromedp.Navigate(gphotosUrl+s.userPath+s.albumPath), "to start", 20000*time.Millisecond, 5); err != nil {
+		if err := s.navigateWithAction(ctx, log.Logger, chromedp.Navigate(gphotosUrl+s.userPath+s.albumPath), "to start", 5*time.Minute, 5); err != nil {
 			return err
 		}
 		chromedp.WaitReady("body", chromedp.ByQuery).Do(ctx)
@@ -858,7 +858,7 @@ func navWithAction(ctx context.Context, action chromedp.Action) error {
 	cl.muNavWaiting.Lock()
 	cl.navWaiting = true
 	cl.muNavWaiting.Unlock()
-	t := time.NewTimer(2 * time.Minute)
+	t := time.NewTimer(5 * time.Minute)
 	select {
 	case <-cl.navDone:
 		if !t.Stop() {
@@ -952,7 +952,7 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 			log.Trace().Msgf("requesting download")
 
 			// context timeout just in case
-			ctxTimeout, cancel := context.WithTimeout(ctx, 3*time.Second)
+			ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 
 			err := chromedp.Run(ctxTimeout,
@@ -989,7 +989,7 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 			break
 		} else if ctx.Err() != nil {
 			return ctx.Err()
-		} else if i >= 3 {
+		} else if i >= 5 {
 			log.Debug().Msgf("tried to request download %d times, giving up now", i)
 			return fmt.Errorf("failed to request download after %d tries, %w, %w", i, errCouldNotPressDownloadButton, err)
 		} else if errors.Is(err, errCouldNotPressDownloadButton) || errors.Is(err, context.DeadlineExceeded) {
@@ -998,7 +998,7 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 			return fmt.Errorf("encountered error '%s' when requesting download", err.Error())
 		}
 
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(time.Duration(100*math.Pow(2, float64(i))) * time.Millisecond)
 	}
 
 	return nil
@@ -1006,7 +1006,7 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 
 // navigateToPhoto navigates to the photo page for the given image ID.
 func (s *Session) navigateToPhoto(ctx context.Context, log zerolog.Logger, imageId string) error {
-	return s.navigateWithAction(ctx, log, chromedp.Navigate(s.getPhotoUrl(imageId)), "to item "+imageId, 10000*time.Millisecond, 5)
+	return s.navigateWithAction(ctx, log, chromedp.Navigate(s.getPhotoUrl(imageId)), "to item "+imageId, 5*time.Minute, 5)
 }
 
 func (s *Session) navigateWithAction(ctx context.Context, log zerolog.Logger, action chromedp.Action, desc string, timeout time.Duration, retries int) error {
@@ -1072,7 +1072,7 @@ func acquireTabLock(log zerolog.Logger, forWhat string) func() {
 // if it is not already open. Then we read the date from the
 // aria-label="Date taken: ?????" field.
 func (s *Session) getPhotoData(ctx context.Context, log zerolog.Logger, imageId string) (PhotoData, error) {
-	ctx, cancel := context.WithTimeout(ctx, 4*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	start := time.Now()
@@ -1173,8 +1173,8 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 
 	start := time.Now()
 
-	timeoutTimer := time.NewTimer(120 * time.Second)
-	refreshTimer := time.NewTimer(120 * time.Second)
+	timeoutTimer := time.NewTimer(5 * time.Minute)
+	refreshTimer := time.NewTimer(5 * time.Minute)
 	requestTimer := time.NewTimer(0 * time.Second)
 
 	log.Trace().Msgf("requesting download from tab %s", chromedp.FromContext(ctx).Target.TargetID)
@@ -1220,7 +1220,7 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 }
 
 func (*Session) checkForStillProcessing(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 4000*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	log.Trace().Msgf("checking for still processing dialog")
 
@@ -1305,7 +1305,7 @@ func (s *Session) waitForDownload(log zerolog.Logger, downloadInfo NewDownload, 
 	log = log.With().Str("GUID", downloadInfo.GUID).Logger()
 
 	log.Trace().Msgf("entering waitForDownload")
-	downloadTimeout := time.NewTimer(time.Minute)
+	downloadTimeout := time.NewTimer(5 * time.Minute)
 progressLoop:
 	for {
 		select {
@@ -1317,7 +1317,7 @@ progressLoop:
 			} else {
 				// still downloading
 				log.Trace().Msgf("waitForDownload: received download still in progress message")
-				downloadTimeout.Reset(time.Minute)
+				downloadTimeout.Reset(5 * time.Minute)
 			}
 		case <-downloadTimeout.C:
 			return fmt.Errorf("timeout waiting for download to complete for %v", imageId)
@@ -1445,7 +1445,7 @@ func (s *Session) downloadAndProcessItem(ctx context.Context, log zerolog.Logger
 		}
 		var photoData PhotoData
 		var err error
-		for i := range 3 {
+		for i := range 5 {
 			var downloadInfo NewDownload
 			var downloadProgressChan <-chan bool
 			startDownloadMu.Lock()
@@ -1455,12 +1455,15 @@ func (s *Session) downloadAndProcessItem(ctx context.Context, log zerolog.Logger
 				hasOriginalChan <- hasOriginal
 			}
 			if err != nil {
-				log.Trace().Msgf("download failed: %v", err)
-				break
+				log.Warn().Msgf("download failed, retrying: %v", err)
+				time.Sleep(time.Duration(500*math.Pow(2, float64(i))) * time.Millisecond)
+				continue
 			} else {
 				err = s.waitForDownload(log, downloadInfo, downloadProgressChan, imageId)
 				if err != nil {
-					break
+					log.Warn().Msgf("download failed, retrying: %v", err)
+					time.Sleep(time.Duration(500*math.Pow(2, float64(i))) * time.Millisecond)
+					continue
 				}
 
 				log.Trace().Msgf("download completed, will continue processing when photo data is ready")
@@ -1469,7 +1472,8 @@ func (s *Session) downloadAndProcessItem(ctx context.Context, log zerolog.Logger
 				}
 				err = s.processDownload(log, downloadInfo, isOriginal, hasOriginal, imageId, photoData)
 				if errors.Is(err, errUnexpectedDownload) {
-					log.Err(err).Msgf("error processing download for %s (try %d/3)", imageId, i+1)
+					log.Err(err).Msgf("error processing download for %s (try %d/5)", imageId, i+1)
+					time.Sleep(time.Duration(500*math.Pow(2, float64(i))) * time.Millisecond)
 					continue
 				}
 				log.Debug().Int64("duration", time.Since(start).Milliseconds()).Msgf("doDownload done")
@@ -1487,13 +1491,13 @@ func (s *Session) downloadAndProcessItem(ctx context.Context, log zerolog.Logger
 	}
 
 	go func() {
-		deadline := time.NewTimer(30 * time.Minute)
+		deadline := time.NewTimer(5 * time.Minute)
 		for {
 			select {
 			case <-ctx.Done():
 				errChan <- ctx.Err()
 				return
-			case <-time.After(60 * time.Second):
+			case <-time.After(5 * time.Minute):
 				log.Trace().Msgf("downloadAndProcessItem: waiting for %d jobs to finish", jobsRemaining)
 			case <-deadline.C:
 				errChan <- fmt.Errorf("downloadAndProcessItem: timeout waiting for %d jobs for %s", jobsRemaining, imageId)
@@ -1642,7 +1646,7 @@ func getScrollPosition(ctx context.Context, sliderPos *float64) error {
 	var err error
 	for range 3 {
 		func() {
-			ctx, cancel := context.WithTimeout(ctx, 4000*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 			if err != nil {
 				unlock := acquireTabLock(log.Logger, "getScrollPosition")
@@ -1756,7 +1760,7 @@ func (s *Session) resync(ctx context.Context) error {
 		for {
 			done := false
 			select {
-			case <-time.After(60 * time.Second):
+			case <-time.After(5 * time.Minute):
 			case <-ctx.Done():
 				done = true
 			}
@@ -1794,7 +1798,7 @@ syncAllLoop:
 			target.ActivateTarget(chromedp.FromContext(ctx).Target.TargetID).Do(ctx)
 			if retries != 0 {
 				log.Trace().Msgf("we seem to be stuck, manually scrolling might help")
-				if err := doActionWithTimeout(ctx, chromedp.KeyEvent(kb.ArrowDown), 1000*time.Millisecond); err != nil {
+				if err := doActionWithTimeout(ctx, chromedp.KeyEvent(kb.ArrowDown), 5*time.Minute); err != nil {
 					log.Warn().Err(err).Msgf("error scrolling page down manually, %v", err)
 				}
 				time.Sleep(200 * time.Millisecond)
@@ -1813,7 +1817,7 @@ syncAllLoop:
 
 		if scrollErr := getScrollPosition(ctx, &sliderPos); scrollErr != nil {
 			// sometimes chromedp gets into a bad state here, so let's restart navigation and try again
-			if err := s.navigateWithAction(ctx, log.Logger, chromedp.Navigate(gphotosUrl+s.userPath+s.albumPath), "to start", 20000*time.Millisecond, 5); err != nil {
+			if err := s.navigateWithAction(ctx, log.Logger, chromedp.Navigate(gphotosUrl+s.userPath+s.albumPath), "to start", 5*time.Minute, 5); err != nil {
 				return fmt.Errorf("error getting slider position, %w, followed by error when attempting to recover, %v", scrollErr, err)
 			}
 			chromedp.WaitReady("body", chromedp.ByQuery).Do(ctx)
@@ -1844,7 +1848,7 @@ syncAllLoop:
 			if retries == 0 {
 				// start by scrolling to the next batch by focusing the last processed node
 				log.Trace().Msgf("scrolling to last processed node: %v", lastNode.NodeID)
-				if err := doActionWithTimeout(ctx, dom.Focus().WithNodeID(lastNode.NodeID), 1000*time.Millisecond); err != nil {
+				if err := doActionWithTimeout(ctx, dom.Focus().WithNodeID(lastNode.NodeID), 5*time.Minute); err != nil {
 					log.Debug().Msgf("error scrolling to next batch of items: %v", err)
 				}
 			}

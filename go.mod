@@ -1,4 +1,4 @@
-module github.com/spraot/gphotos-cdp
+module github.com/npike/gphotos-cdp
 
 go 1.23
 
