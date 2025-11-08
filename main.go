@@ -781,8 +781,10 @@ func (s *Session) setFirstItem(ctx context.Context) error {
 	// wait for page to be loaded, i.e. that we can make an element active by using
 	// the right arrow key.
 	var firstItem string
+	var attempts int
 	for {
-		log.Trace().Msg("attempting to find first item")
+		attempts++
+		log.Trace().Int("attempts", attempts).Msg("attempting to find first item")
 		attributes := make(map[string]string)
 		if err := chromedp.Run(ctx,
 			chromedp.KeyEvent(kb.ArrowRight),
@@ -790,6 +792,12 @@ func (s *Session) setFirstItem(ctx context.Context) error {
 			chromedp.Attributes(`document.activeElement`, &attributes, chromedp.ByJSPath)); err != nil {
 			return err
 		}
+		log.Trace().Interface("activeElementAttributes", attributes).Msg("Checked active element")
+
+		if attempts%20 == 0 {
+			log.Warn().Int("attempts", attempts).Msg("Still trying to find first item to start sync. The page might not be loading correctly or a UI change has occurred.")
+		}
+
 		if len(attributes) == 0 {
 			time.Sleep(tick)
 			continue
