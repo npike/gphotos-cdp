@@ -97,6 +97,7 @@ var toDate time.Time
 var loc GPhotosLocale
 
 func main() {
+	log.Info().Msg("hello world")
 	zerolog.TimestampFieldName = "dt"
 	zerolog.TimeFieldFormat = "2006-01-02T15:04:05.999Z07:00"
 	flag.Parse()
@@ -934,6 +935,10 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 	}
 
 	moreOptionsSelector := getAriaLabelSelector(loc.MoreOptionsLabel)
+	log.Debug().
+		Str("moreOptionsSelector", moreOptionsSelector).
+		Str("downloadSelector", downloadSelector).
+		Msg("Attempting to use selectors to find and click download buttons.")
 
 	foundDownloadButton := false
 	i := 0
@@ -993,6 +998,7 @@ func requestDownload(ctx context.Context, log zerolog.Logger, original bool, has
 			log.Debug().Msgf("tried to request download %d times, giving up now", i)
 			return fmt.Errorf("failed to request download after %d tries, %w, %w", i, errCouldNotPressDownloadButton, err)
 		} else if errors.Is(err, errCouldNotPressDownloadButton) || errors.Is(err, context.DeadlineExceeded) {
+			log.Warn().Err(err).Msg("Failed to find or click download button. This is likely due to a Google Photos UI change, an unsupported locale, or a blocking pop-up.")
 			log.Debug().Msgf("trying to request download again after error: %v", err)
 		} else {
 			return fmt.Errorf("encountered error '%s' when requesting download", err.Error())
@@ -1180,6 +1186,7 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 	log.Trace().Msgf("requesting download from tab %s", chromedp.FromContext(ctx).Target.TargetID)
 
 	for {
+		log.Trace().Msg("Checking for 'still processing' dialog...")
 		// Checking for gphotos warning that this video can't be downloaded (no known solution)
 		if err := s.checkForStillProcessing(ctx); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			return NewDownload{}, nil, fmt.Errorf("error checking for still processing, %w", err)
@@ -1198,6 +1205,7 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 				refreshTimer = time.NewTimer(5 * time.Second)
 			}
 		case <-refreshTimer.C:
+			log.Warn().Msg("Download did not start in time. Reloading page. This could indicate a slow network or a UI/locale issue preventing the download trigger.")
 			log.Debug().Msgf("reloading page because download failed to start")
 			if err := s.navigateToPhoto(ctx, log, imageId); err != nil {
 				log.Error().Msgf("startDownload: %s", err.Error())
