@@ -1206,7 +1206,7 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 			if err := requestDownloadBackup(ctx, log, imageId); err != nil {
 				return NewDownload{}, nil, err
 			}
-			refreshTimer = time.NewTimer(5 * time.Second)
+			refreshTimer = time.NewTimer(500 * time.Second)
 		case <-refreshTimer.C:
 			log.Warn().Str("url", s.getPhotoUrl(imageId)).Msg("Download did not start in time. Reloading page. This could indicate a slow network or a UI/locale issue preventing the download trigger.")
 			log.Debug().Msgf("reloading page because download failed to start")
