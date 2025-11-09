@@ -931,179 +931,91 @@ func pressButton(ctx context.Context, key string, modifier input.Modifier) error
 }
 
 // requestDownload clicks the icons to start the download of the currently
-
 // viewed item.
-
-func (s *Session) requestDownload(ctx context.Context, log zerolog.Logger, imageId string, original bool, hasOriginal *bool) error {
-
+func requestDownload(ctx context.Context, log zerolog.Logger, original bool, hasOriginal *bool) error {
 	log.Debug().Msgf("requesting download")
-
 	originalSelector := getAriaLabelSelector(loc.DownloadOriginalLabel)
-
 	var downloadSelector string
-
 	if original {
-
 		downloadSelector = originalSelector
-
 	} else {
-
 		downloadSelector = getAriaLabelSelector(loc.DownloadLabel)
-
 	}
-
-
 
 	moreOptionsSelector := getAriaLabelSelector(loc.MoreOptionsLabel)
-
 	log.Debug().
-
 		Str("moreOptionsSelector", moreOptionsSelector).
-
 		Str("downloadSelector", downloadSelector).
-
-		Str("url", s.getPhotoUrl(imageId)).
-
 		Msg("Attempting to use selectors to find and click download buttons.")
 
-
-
 	foundDownloadButton := false
-
 	i := 0
-
 	for {
-
 		i++
-
 		log := log.With().Int("attempt", i).Logger()
-
 		err := func() error {
-
 			var start time.Time
-
 			defer func() {
-
 				log.Debug().Int64("duration", time.Since(start).Milliseconds()).Msgf("done attempt request download")
-
 			}()
 
-
-
 			// unlock := acquireTabLock(log, "to request download")
-
 			// defer unlock()
-
 			start = time.Now()
-
 			log.Trace().Msgf("requesting download")
 
-
-
 			// context timeout just in case
-
 			ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Minute)
-
 			defer cancel()
 
-
-
 			err := chromedp.Run(ctxTimeout,
-
 				target.ActivateTarget(chromedp.FromContext(ctxTimeout).Target.TargetID),
-
 				chromedp.ActionFunc(func(ctx context.Context) error {
-
 					// Wait for more options menu to appear
-
 					if !foundDownloadButton {
-
 						// Open more options dialog
-
 						if err := chromedp.Evaluate(`[...document.querySelectorAll('`+moreOptionsSelector+`')].pop()?.click()`, nil).Do(ctx); err != nil {
-
 							return fmt.Errorf("could not open 'more options' dialog due to %w", err)
-
 						}
-
 					}
-
 					return nil
-
 				}),
-
 				chromedp.Sleep(10*time.Millisecond),
-
 				chromedp.ActionFunc(func(ctx context.Context) error {
-
 					if hasOriginal != nil {
-
 						return chromedp.Evaluate(`!!document.querySelector('`+originalSelector+`')`, hasOriginal).Do(ctx)
-
 					}
-
 					return nil
-
 				}),
-
 				chromedp.SendKeys(downloadSelector, kb.Enter),
-
 			)
-
 			log.Trace().Msgf("done attempting to request download")
-
 			return err
-
 		}()
 
-
-
 		if err != nil && (strings.Contains(err.Error(), "Cannot read properties of null (reading 'click')") || errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "Could not find node with given id (-32000)")) {
-
 			err = errCouldNotPressDownloadButton
-
 		}
-
-
 
 		if err == nil {
-
 			log.Debug().Int("triesToSuccess", i).Msgf("download request succeeded")
-
 			break
-
 		} else if ctx.Err() != nil {
-
 			return ctx.Err()
-
 		} else if i >= 5 {
-
 			log.Debug().Msgf("tried to request download %d times, giving up now", i)
-
 			return fmt.Errorf("failed to request download after %d tries, %w, %w", i, errCouldNotPressDownloadButton, err)
-
 		} else if errors.Is(err, errCouldNotPressDownloadButton) || errors.Is(err, context.DeadlineExceeded) {
-
-			log.Warn().Err(err).Str("url", s.getPhotoUrl(imageId)).Msg("Failed to find or click download button. This is likely due to a Google Photos UI change, an unsupported locale, or a blocking pop-up.")
-
+			log.Warn().Err(err).Msg("Failed to find or click download button. This is likely due to a Google Photos UI change, an unsupported locale, or a blocking pop-up.")
 			log.Debug().Msgf("trying to request download again after error: %v", err)
-
 		} else {
-
 			return fmt.Errorf("encountered error '%s' when requesting download", err.Error())
-
 		}
 
-
-
 		time.Sleep(time.Duration(100*math.Pow(2, float64(i))) * time.Millisecond)
-
 	}
 
-
-
 	return nil
-
 }
 
 // navigateToPhoto navigates to the photo page for the given image ID.
@@ -1290,16 +1202,11 @@ func (s *Session) startDownload(ctx context.Context, log zerolog.Logger, imageId
 
 		select {
 		case <-requestTimer.C:
-			if err := s.requestDownload(ctx, log, imageId, isOriginal, hasOriginal); err != nil {
-				if isOriginal || !errors.Is(err, errCouldNotPressDownloadButton) {
-					return NewDownload{}, nil, err
-				} else if !isOriginal {
-					requestDownloadBackup(ctx, log, imageId)
-				}
-				refreshTimer = time.NewTimer(100 * time.Millisecond)
-			} else {
-				refreshTimer = time.NewTimer(5 * time.Second)
+			// Always use the backup method (Shift+D)
+			if err := requestDownloadBackup(ctx, log, imageId); err != nil {
+				return NewDownload{}, nil, err
 			}
+			refreshTimer = time.NewTimer(5 * time.Second)
 		case <-refreshTimer.C:
 			log.Warn().Str("url", s.getPhotoUrl(imageId)).Msg("Download did not start in time. Reloading page. This could indicate a slow network or a UI/locale issue preventing the download trigger.")
 			log.Debug().Msgf("reloading page because download failed to start")
